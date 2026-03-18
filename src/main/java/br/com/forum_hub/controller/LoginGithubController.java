@@ -1,10 +1,18 @@
 package br.com.forum_hub.controller;
 
+import br.com.forum_hub.domain.autenticacao.DadosToken;
+import br.com.forum_hub.domain.autenticacao.TokenService;
 import br.com.forum_hub.domain.autenticacao.github.LoginGithubService;
+import br.com.forum_hub.domain.usuario.Usuario;
+import br.com.forum_hub.domain.usuario.UsuarioRepository;
+import br.com.forum_hub.infra.exception.RegraDeNegocioException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,6 +25,11 @@ import java.net.URI;
 public class LoginGithubController {
     @Autowired
     private LoginGithubService loginGithubService;
+    @Autowired
+    private UsuarioRepository usuarioRepository;
+    @Autowired
+    private TokenService tokenService;
+
     @GetMapping
     public ResponseEntity<Void> redirecionarGithub() {
         String githubUrl = this.loginGithubService.githubUrl();
@@ -26,8 +39,19 @@ public class LoginGithubController {
     }
 
     @GetMapping("/autorizado")
-    public ResponseEntity<String> obterToken(@RequestParam String code) {
-        String token = this.loginGithubService.obterToken(code);
-        return ResponseEntity.ok(token);
+    public ResponseEntity<DadosToken> autenticarUsuarioOauth(@RequestParam String code) {
+        String email = this.loginGithubService.obterEmail(code);
+        Usuario usuario = this.usuarioRepository.findByEmailIgnoreCaseAndVerificadoTrue(email)
+                .orElseThrow(() -> new RegraDeNegocioException(String.format("Usuario de email %s não encontrado!")));
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                usuario, null, usuario.getAuthorities());
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        String tokenAcesso = tokenService.gerarToken((Usuario) authentication.getPrincipal());
+        String refreshToken = tokenService.gerarRefreshToken((Usuario) authentication.getPrincipal());
+
+        return ResponseEntity.ok(new DadosToken(tokenAcesso, refreshToken));
     }
 }
