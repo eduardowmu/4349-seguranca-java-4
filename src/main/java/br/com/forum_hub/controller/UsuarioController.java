@@ -73,9 +73,15 @@ public class UsuarioController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping("adicionar-perfil/{id}")
+    @PatchMapping("/adicionar-perfil/{id}")
     public ResponseEntity<DadosListagemUsuario> adicionarPerfil(@PathVariable Long id, @RequestBody @Valid DadosPerfil dados){
         var usuario = usuarioService.adicionarPerfil(id, dados);
         return ResponseEntity.ok(new DadosListagemUsuario(usuario));
+    }
+
+    @PatchMapping("/configurar-a2f")
+    public ResponseEntity<String> gerarQrCode(@AuthenticationPrincipal Usuario logado) {
+        String url = this.usuarioService.gerarQrCode(logado);
+        return ResponseEntity.ok(url);
     }
 }
