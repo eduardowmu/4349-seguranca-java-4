@@ -4,13 +4,16 @@ import br.com.forum_hub.domain.autenticacao.DadosLogin;
 import br.com.forum_hub.domain.autenticacao.DadosRefreshToken;
 import br.com.forum_hub.domain.autenticacao.DadosToken;
 import br.com.forum_hub.domain.autenticacao.TokenService;
+import br.com.forum_hub.domain.usuario.DadosA2F;
 import br.com.forum_hub.domain.usuario.Usuario;
 import br.com.forum_hub.domain.usuario.UsuarioRepository;
+import br.com.forum_hub.infra.exception.RegraDeNegocioException;
+import br.com.forum_hub.infra.seguranca.totp.TotpService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,11 +24,14 @@ public class AutenticacaoController {
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
     private final UsuarioRepository usuarioRepository;
+    private final TotpService totpService;
 
-    public AutenticacaoController(AuthenticationManager authenticationManager, TokenService tokenService, UsuarioRepository usuarioRepository) {
+    public AutenticacaoController(AuthenticationManager authenticationManager, TokenService tokenService,
+                                  UsuarioRepository usuarioRepository, TotpService totpService) {
         this.authenticationManager = authenticationManager;
         this.tokenService = tokenService;
         this.usuarioRepository = usuarioRepository;
+        this.totpService = totpService;
     }
 
     @PostMapping("/login")
@@ -33,10 +39,34 @@ public class AutenticacaoController {
         var autenticationToken = new UsernamePasswordAuthenticationToken(dados.email(), dados.senha());
         var authentication = authenticationManager.authenticate(autenticationToken);
 
-        String tokenAcesso = tokenService.gerarToken((Usuario) authentication.getPrincipal());
-        String refreshToken = tokenService.gerarRefreshToken((Usuario) authentication.getPrincipal());
+        Usuario usuario = (Usuario) authentication.getPrincipal();
 
-        return ResponseEntity.ok(new DadosToken(tokenAcesso, refreshToken));
+        if(usuario.getA2fAtiva()) {
+            return ResponseEntity.ok(new DadosToken(null, null, Boolean.TRUE));
+        }
+
+        String tokenAcesso = tokenService.gerarToken(usuario);
+        String refreshToken = tokenService.gerarRefreshToken(usuario);
+
+        return ResponseEntity.ok(new DadosToken(tokenAcesso, refreshToken, Boolean.FALSE));
+    }
+
+    @PostMapping("/verificar-a2f")
+    public ResponseEntity<DadosToken> verificarSegundoFator(@Valid @RequestBody DadosA2F dadosA2F){
+        Usuario usuario = this.usuarioRepository.findByNomeUsuarioIgnoreCaseAndVerificadoTrueAndAtivoTrue(
+                dadosA2F.email()).orElseThrow(() -> new RegraDeNegocioException(
+                        String.format("Usuário %s não encontrado", dadosA2F.email())));
+
+        Boolean codigoValido = this.totpService.verificarCodigo(dadosA2F.codigo(), usuario);
+
+        if(!codigoValido) {
+            throw new BadCredentialsException("Código inválido");
+        }
+
+        String tokenAcesso = tokenService.gerarToken(usuario);
+        String refreshToken = tokenService.gerarRefreshToken(usuario);
+
+        return ResponseEntity.ok(new DadosToken(tokenAcesso, refreshToken, Boolean.FALSE));
     }
 
     @PostMapping("/atualizar-token")
@@ -48,6 +78,6 @@ public class AutenticacaoController {
         String tokenAcesso = tokenService.gerarToken(usuario);
         String tokenAtualizacao = tokenService.gerarRefreshToken(usuario);
 
-        return ResponseEntity.ok(new DadosToken(tokenAcesso, tokenAtualizacao));
+        return ResponseEntity.ok(new DadosToken(tokenAcesso, tokenAtualizacao, Boolean.FALSE));
     }
 }

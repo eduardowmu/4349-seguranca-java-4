@@ -52,6 +52,6 @@ public class LoginGoogleController {
         String tokenAcesso = tokenService.gerarToken((Usuario) authentication.getPrincipal());
         String refreshToken = tokenService.gerarRefreshToken((Usuario) authentication.getPrincipal());
 
-        return ResponseEntity.ok(new DadosToken(tokenAcesso, refreshToken));
+        return ResponseEntity.ok(new DadosToken(tokenAcesso, refreshToken, Boolean.FALSE));
     }
 }

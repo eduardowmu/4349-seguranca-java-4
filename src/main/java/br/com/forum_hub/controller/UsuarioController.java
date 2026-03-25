@@ -84,4 +84,11 @@ public class UsuarioController {
         String url = this.usuarioService.gerarQrCode(logado);
         return ResponseEntity.ok(url);
     }
+
+    @PatchMapping("ativar-a2f")
+    public ResponseEntity<Void> ativarA2f(@RequestParam String codigo, @AuthenticationPrincipal Usuario logado){
+        usuarioService.ativarA2f(codigo, logado);
+        return ResponseEntity.noContent().build();
+    }
+
 }

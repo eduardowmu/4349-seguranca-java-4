@@ -16,4 +16,10 @@ public class TotpService {
                 issuer, usuario.getUsername(), usuario.getSecret(), issuer
         );
     }
+
+    public Boolean verificarCodigo(String codigo, Usuario logado) {
+        String secretDecoded = null;
+        String codigoAplicacao = null;
+        return codigoAplicacao.equals(codigo);
+    }
 }
